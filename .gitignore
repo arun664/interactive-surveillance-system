@@ -62,6 +62,7 @@ web_modules/
 .rts2_cache_cjs/
 .rts2_cache_es/
 .rts2_cache_umd/
+__pycache__
 
 # Optional REPL history
 .node_repl_history
@@ -134,3 +135,59 @@ dist
 .yarn/build-state.yml
 .yarn/install-state.gz
 .pnp.*
+
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Distribution / packaging
+.eggs/
+dist/
+build/
+sdist/
+*.egg-info/
+*.whl
+*.pth
+MANIFEST
+
+# Installer logs
+pip-log.txt
+pip-delete-this-directory.txt
+pip-download-cache/
+
+# Environments
+.venv
+venv/
+env/
+ENV/
+*.env
+
+# Unit test / coverage reports
+htmlcov/
+.tox/
+.coverage
+.coverage.*
+.cache
+nosetests.xml
+coverage.xml
+*.log
+*.out
+*.rpt
+
+# mypy
+.mypy_cache/
+mypy-report/
+
+# Flake8
+.flake8
+
+# Jupyter Notebook
+.ipynb_checkpoints
+
+# VS Code
+.vscode/
+
+# OS or Editor-specific files
+.DS_Store
+Thumbs.db
