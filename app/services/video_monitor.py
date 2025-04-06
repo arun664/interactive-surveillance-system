@@ -2,6 +2,8 @@ import cv2
 from ultralytics import YOLO
 import threading
 import time
+from datetime import datetime
+
 
 model = YOLO("yolov8n.pt")
 
@@ -15,6 +17,15 @@ ZONE_LEFT = "left"
 ZONE_CENTER = "center"
 ZONE_RIGHT = "right"
 
+def capture_snapshot(file_path="frame_snapshots/latest.jpg"):
+    cap = cv2.VideoCapture(0, cv2.CAP_DSHOW)
+    ret, frame = cap.read()
+    if ret:
+        cv2.imwrite(file_path, frame)
+    cap.release()
+    return file_path if ret else None
+
+
 def get_position(x, width):
     if x < width / 3:
         return ZONE_LEFT
@@ -27,6 +38,7 @@ def _detection_loop():
     global is_running, latest_detections
     cap = cv2.VideoCapture(video_source, cv2.CAP_DSHOW)
     is_running = True
+    frame_count = 0  # Add this above the loop
 
     while is_running:
         ret, frame = cap.read()
@@ -69,6 +81,15 @@ def _detection_loop():
                 "objects": frame_objects,
                 "actions": frame_actions
             }
+
+            frame_count += 1
+            if frame_count % 30 == 0:  # Save every ~30 frames (~1s at 30fps)
+                timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+                image_path = f"frame_snapshots/frame_{timestamp}.jpg"
+                cv2.imwrite(image_path, frame)
+
+                # Log event
+                log_detection_event(latest_detections, image_path)
 
         # Show video
         cv2.imshow("Live Detection", frame)

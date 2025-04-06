@@ -1,5 +1,8 @@
 from fastapi import FastAPI
 from app.routes import voice, alert, rules, monitor
+from dotenv import load_dotenv
+
+load_dotenv()
 
 app = FastAPI(title="Interactive Surveillance Backend")
 
