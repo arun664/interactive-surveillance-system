@@ -143,3 +143,4 @@ __pycache__/
 *.pyd
 
 .vscode/
+security_footage.mp4
