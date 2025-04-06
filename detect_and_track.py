@@ -13,6 +13,7 @@ from playsound import playsound
 import threading
 import os
 from gtts import gTTS
+import requests
 
 # Alert log
 alert_log = []
@@ -26,9 +27,20 @@ class SecurityAnalyzer:
         self.config = {
             "loitering_threshold": 10,  # seconds
             "pacing_threshold": 3,      # direction changes
-            "intrusion_zones": [],      # List of polygon coordinates
+            "intrusion_zones": [
+                # Predefined zone with name and active status
+                {
+                    "points": [(100, 100), (400, 100), (400, 400), (100, 400)],
+                    "name": "Default Zone",
+                    "active": True
+                }
+            ],
+            "zones_enabled": True,      # Toggle to enable/disable all zone detection
             "confidence_threshold": 0.5, # Detection confidence threshold
             "audio_alerts": True,       # Enable audio alerts
+            "quiet_period_start": "22:00",  # Start quiet period (24-hour format)
+            "quiet_period_end": "06:00",    # End quiet period (24-hour format)
+            "quiet_period_enabled": False,  # Enable/disable quiet period
         }
 
         # Update with provided config
@@ -123,11 +135,84 @@ class SecurityAnalyzer:
 
         return frame, frame_alerts
 
+    def send_telegram_alert(self, alert_data):
+        try:
+            bot_token = '7652787142:AAG8S_ayLwYCAUNCxwwrePJ9m5x2rbHqQBE'
+            chat_id = '938547627'
+
+        # System/Camera name
+            system_name = "🛡️ Hackathon Security Bot"
+
+            alert_type = alert_data.get("type", "unknown").upper()
+            track_id = alert_data.get("track_id", "N/A")
+            suspicion_score = alert_data.get("suspicion_score", 0.0)
+            location = alert_data.get("location", (0, 0))
+            timestamp = time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(alert_data.get("timestamp", time.time())))
+            zone_id = alert_data.get("zone_id", None)
+            behaviors = alert_data.get("behaviors", [])
+
+        # Compose message
+            message = f"{system_name}\n\n"
+            message += f"🚨 *{alert_type} Detected!*\n"
+            message += f"🆔 Track ID: `{track_id}`\n"
+            message += f"📍 Location: `{location}`\n"
+            if zone_id is not None:
+                message += f"🗺️ Zone ID: `{zone_id}`\n"
+            if behaviors:
+                message += f"🧠 Behaviors: {', '.join(behaviors)}\n"
+            message += f"📈 Suspicion Score: `{suspicion_score:.1f}`\n"
+            message += f"🕒 Time: {timestamp}"
+
+            url = f"https://api.telegram.org/bot{bot_token}/sendMessage"
+            payload = {
+                "chat_id": chat_id,
+                "text": message,
+                "parse_mode": "Markdown"
+            }
+
+            response = requests.post(url, data=payload)
+            if response.status_code != 200:
+                print("Telegram alert failed:", response.text)
+
+        except Exception as e:
+            print(f"Telegram alert error: {e}")
+
+    def is_quiet_period(self):
+        """Check if current time is in the configured quiet period"""
+        if not self.config.get("quiet_period_enabled", False):
+            return False
+
+        start_str = self.config.get("quiet_period_start", "22:00")
+        end_str = self.config.get("quiet_period_end", "06:00")
+
+        # Parse time strings
+        try:
+            from datetime import datetime, time
+            now = datetime.now().time()
+            start_hours, start_minutes = map(int, start_str.split(":"))
+            end_hours, end_minutes = map(int, end_str.split(":"))
+
+            start_time = time(start_hours, start_minutes)
+            end_time = time(end_hours, end_minutes)
+
+            # Handle overnight periods (e.g., 22:00 to 06:00)
+            if start_time > end_time:
+                return now >= start_time or now <= end_time
+            else:
+                return start_time <= now <= end_time
+        except Exception as e:
+            print(f"Error checking quiet period: {e}")
+            return False
+
     def analyze_behaviors(self, track_id, current_time):
         """Analyze tracked person for suspicious behaviors"""
         track = self.tracks[track_id]
         alerts = []
         behaviors_detected = []
+
+        # Check if in quiet period - suppress all alerts
+        if self.is_quiet_period():
+            return alerts
 
         # Avoid alert spam - don't alert on same ID within 10 seconds
         if track_id in self.last_alert_time and current_time - self.last_alert_time[track_id] < 10:
@@ -160,6 +245,7 @@ class SecurityAnalyzer:
                             "suspicion_score": self.suspicion_scores[track_id]
                         }
                         alerts.append(alert_data)
+                        self.send_telegram_alert(alert_data)
 
         # Check for pacing
         pacing_detected = False
@@ -181,25 +267,36 @@ class SecurityAnalyzer:
             track['direction_changes'] = 0  # Reset counter
 
         # Check for zone intrusion
-        intrusion_detected = False
-        if self.config['intrusion_zones']:
+        if self.config['zones_enabled'] and len(self.config['intrusion_zones']) > 0:
+            current_point = track['positions'][-1]
+
             for zone_idx, zone in enumerate(self.config['intrusion_zones']):
-                position = track['positions'][-1]
-                if self.point_in_polygon(position, zone):
-                    intrusion_detected = True
-                    behaviors_detected.append("intrusion")
+                # Skip inactive zones
+                if not zone.get('active', True):
+                    continue
+
+                # Convert zone format if necessary (handle both old and new formats)
+                zone_points = zone['points'] if isinstance(zone, dict) else zone
+
+                if self.point_in_polygon(current_point, zone_points):
+                    behaviors_detected.append("zone_intrusion")
                     # Increase suspicion score
                     self.suspicion_scores[track_id] += 3.0
 
+                    # Get zone name
+                    zone_name = zone.get('name', f"Zone {zone_idx+1}") if isinstance(zone, dict) else f"Zone {zone_idx+1}"
+
                     alert_data = {
-                        "type": "intrusion",
+                        "type": "zone_intrusion",
                         "track_id": track_id,
                         "timestamp": current_time,
-                        "location": position,
+                        "location": current_point,
+                        "suspicion_score": self.suspicion_scores[track_id],
                         "zone_id": zone_idx,
-                        "suspicion_score": self.suspicion_scores[track_id]
+                        "zone_name": zone_name
                     }
                     alerts.append(alert_data)
+                    break  # Only report the first zone intrusion
 
         # Check for high risk combination of behaviors
         if len(behaviors_detected) > 1 or self.suspicion_scores[track_id] >= 5.0:
@@ -316,16 +413,43 @@ class SecurityAnalyzer:
                 cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 255), 2
             )
 
-        # Draw intrusion zones
-        for i, zone in enumerate(self.config['intrusion_zones']):
-            pts = np.array(zone, np.int32)
-            pts = pts.reshape((-1, 1, 2))
-            cv2.polylines(annotated_frame, [pts], True, (0, 255, 255), 2)
+        # Draw active intrusion zones
+        if self.config['zones_enabled']:
+            for i, zone in enumerate(self.config['intrusion_zones']):
+                # Skip inactive zones
+                if isinstance(zone, dict) and not zone.get('active', True):
+                    continue
+
+                # Convert zone format if necessary
+                zone_points = zone['points'] if isinstance(zone, dict) else zone
+
+                # Convert to numpy array for drawing
+                if len(zone_points) > 2:  # Need at least 3 points to form a polygon
+                    points = np.array(zone_points, dtype=np.int32)
+
+                    # Get zone name
+                    zone_name = zone.get('name', f"Zone {i+1}") if isinstance(zone, dict) else f"Zone {i+1}"
+
+                    # Draw zone polygon
+                    cv2.polylines(annotated_frame, [points], True, (0, 255, 0), 2)
+                    # Add zone label at the top-left corner of the zone
+                    cv2.putText(
+                        annotated_frame,
+                        zone_name,
+                        (points[0][0], points[0][1] - 10),
+                        cv2.FONT_HERSHEY_SIMPLEX,
+                        0.5,
+                        (0, 255, 0),
+                        1
+                    )
+
+        # Indicate quiet period if active
+        if self.is_quiet_period():
             cv2.putText(
                 annotated_frame,
-                f"Zone {i}",
-                (zone[0][0], zone[0][1] - 10),
-                cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 255), 2
+                "QUIET PERIOD ACTIVE - ALERTS SUPPRESSED",
+                (10, frame.shape[0] - 20),
+                cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 255), 2
             )
 
         # Draw suspicion scores for all tracked objects
@@ -427,15 +551,19 @@ if __name__ == "__main__":
         "intrusion_zones": [
             [(100, 100), (300, 100), (300, 300), (100, 300)]  # Example zone
         ],
+        "zones_enabled": True,
         "confidence_threshold": 0.4,
         "audio_alerts": True,
+        "quiet_period_start": "22:00",
+        "quiet_period_end": "06:00",
+        "quiet_period_enabled": False,
     }
 
     # Create alert sounds using text-to-speech
     alerts = {
         "loitering": "Warning! Loitering detected.",
         "pacing": "Warning! Suspicious pacing behavior detected.",
-        "intrusion": "Alert! Intrusion into restricted zone.",
+        "zone_intrusion": "Alert! Intrusion into restricted zone.",
         "high_risk": "High risk behavior detected! Security response required."
     }
 

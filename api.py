@@ -49,18 +49,24 @@ class Alert(BaseModel):
     duration: Optional[float] = None
     direction_changes: Optional[int] = None
     zone_id: Optional[int] = None
+    zone_name: Optional[str] = None
 
 class Zone(BaseModel):
     points: List[List[float]]
-    name: Optional[str] = None
+    name: str
+    active: bool = True
 
 class Config(BaseModel):
     loitering_threshold: float = 10.0
     pacing_threshold: int = 3
     intrusion_zones: List[Zone] = []
+    zones_enabled: bool = True
     confidence_threshold: float = 0.5
     audio_alerts: bool = True
     camera_source: str = "0"  # Can be a number (webcam) or path to video file
+    quiet_period_start: str = "22:00"  # Start quiet period (24-hour format)
+    quiet_period_end: str = "06:00"    # End quiet period (24-hour format)
+    quiet_period_enabled: bool = False  # Enable/disable quiet period
 
 # Create FastAPI app
 app = FastAPI(title="AI Security Guard API")
