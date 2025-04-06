@@ -14,12 +14,6 @@ import threading
 import os
 from gtts import gTTS
 
-# Load YOLOv8 model
-model = YOLO("yolov8n.pt")
-
-# Open video stream (0 for webcam or use video.mp4)
-cap = cv2.VideoCapture(0)
-
 # Alert log
 alert_log = []
 
@@ -437,6 +431,18 @@ if __name__ == "__main__":
         "audio_alerts": True,
     }
 
+    # Create alert sounds using text-to-speech
+    alerts = {
+        "loitering": "Warning! Loitering detected.",
+        "pacing": "Warning! Suspicious pacing behavior detected.",
+        "intrusion": "Alert! Intrusion into restricted zone.",
+        "high_risk": "High risk behavior detected! Security response required."
+    }
+
+    for alert_type, text in alerts.items():
+        tts = gTTS(text=text, lang='en')
+        tts.save(f"sounds/{alert_type}_alert.mp3")
+
     # Run the analyzer
     alerts = run_security_analyzer(
         video_source=0,  # Use webcam
@@ -449,46 +455,38 @@ if __name__ == "__main__":
     for alert in alerts:
         print(alert)
 
-# Create sounds directory
-os.makedirs("sounds", exist_ok=True)
+    # Load YOLOv8 model
+    model = YOLO("yolov8n.pt")
 
-# Create alert sounds using text-to-speech
-alerts = {
-    "loitering": "Warning! Loitering detected.",
-    "pacing": "Warning! Suspicious pacing behavior detected.",
-    "intrusion": "Alert! Intrusion into restricted zone.",
-    "high_risk": "High risk behavior detected! Security response required."
-}
+    # Open video stream
+    cap = cv2.VideoCapture(0)
 
-for alert_type, text in alerts.items():
-    tts = gTTS(text=text, lang='en')
-    tts.save(f"sounds/{alert_type}_alert.mp3")
+    # Simple detection loop
+    while True:
+        ret, frame = cap.read()
+        if not ret:
+            break
 
-while True:
-    ret, frame = cap.read()
-    if not ret:
-        break
+        # Run YOLOv8 detection
+        results = model(frame)
 
-    # Run YOLOv8 detection
-    results = model(frame)
+        # Filter for 'person' class (class id = 0)
+        for r in results:
+            for box in r.boxes:
+                cls = int(box.cls[0])
+                if cls == 0:
+                    x1, y1, x2, y2 = map(int, box.xyxy[0])
+                    conf = float(box.conf[0])
 
-    # Filter for 'person' class (class id = 0)
-    for r in results:
-        for box in r.boxes:
-            cls = int(box.cls[0])
-            if cls == 0:
-                x1, y1, x2, y2 = map(int, box.xyxy[0])
-                conf = float(box.conf[0])
+                    # Draw box
+                    cv2.rectangle(frame, (x1, y1), (x2, y2), (0, 255, 0), 2)
+                    cv2.putText(frame, f"Person {conf:.2f}", (x1, y1 - 10),
+                                cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 0), 2)
 
-                # Draw box
-                cv2.rectangle(frame, (x1, y1), (x2, y2), (0, 255, 0), 2)
-                cv2.putText(frame, f"Person {conf:.2f}", (x1, y1 - 10),
-                            cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 0), 2)
+        # Show result
+        cv2.imshow("Security Feed", frame)
+        if cv2.waitKey(1) & 0xFF == ord("q"):
+            break
 
-    # Show result
-    cv2.imshow("Security Feed", frame)
-    if cv2.waitKey(1) & 0xFF == ord("q"):
-        break
-
-cap.release()
-cv2.destroyAllWindows()
+    cap.release()
+    cv2.destroyAllWindows()
