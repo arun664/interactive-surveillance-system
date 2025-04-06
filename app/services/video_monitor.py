@@ -3,28 +3,30 @@ from ultralytics import YOLO
 import threading
 import time
 from datetime import datetime
-
+from app.services.gemini_client import log_detection_event
 
 model = YOLO("yolov8n.pt")
 
 video_source = 0
 latest_detections = {}
 is_running = False
-lock = threading.Lock() 
+lock = threading.Lock()
+cap = None  # Camera object to control externally
 
 # Divide the frame into spatial zones
 ZONE_LEFT = "left"
 ZONE_CENTER = "center"
 ZONE_RIGHT = "right"
 
-def capture_snapshot(file_path="frame_snapshots/latest.jpg"):
-    cap = cv2.VideoCapture(0, cv2.CAP_DSHOW)
-    ret, frame = cap.read()
-    if ret:
-        cv2.imwrite(file_path, frame)
-    cap.release()
-    return file_path if ret else None
+monitoring_status = {"running": False}
 
+def capture_snapshot(file_path="frame_snapshots/latest.jpg"):
+    if cap and cap.isOpened():
+        ret, frame = cap.read()
+        if ret:
+            cv2.imwrite(file_path, frame)
+            return file_path
+    return None
 
 def get_position(x, width):
     if x < width / 3:
@@ -35,10 +37,11 @@ def get_position(x, width):
         return ZONE_CENTER
 
 def _detection_loop():
-    global is_running, latest_detections
+    global is_running, latest_detections, cap
     cap = cv2.VideoCapture(video_source, cv2.CAP_DSHOW)
     is_running = True
-    frame_count = 0  # Add this above the loop
+    monitoring_status["running"] = True
+    frame_count = 0
 
     while is_running:
         ret, frame = cap.read()
@@ -70,12 +73,6 @@ def _detection_loop():
                     action = f"person is standing in the {position}"
                 frame_actions.append(action)
 
-            # Draw labels
-            cv2.rectangle(frame, (int(x1), int(y1)), (int(x2), int(y2)), (0, 255, 0), 2)
-            cv2.putText(frame, f"{label} - {position}", (int(x1), int(y1) - 10),
-                        cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 255), 2)
-
-        # Save detections safely
         with lock:
             latest_detections = {
                 "objects": frame_objects,
@@ -83,22 +80,17 @@ def _detection_loop():
             }
 
             frame_count += 1
-            if frame_count % 30 == 0:  # Save every ~30 frames (~1s at 30fps)
+            if frame_count % 30 == 0:
                 timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
                 image_path = f"frame_snapshots/frame_{timestamp}.jpg"
                 cv2.imwrite(image_path, frame)
-
-                # Log event
                 log_detection_event(latest_detections, image_path)
 
-        # Show video
-        cv2.imshow("Live Detection", frame)
-        if cv2.waitKey(25) == ord('q'):
-            break
-
-    cap.release()
-    cv2.destroyAllWindows()
+    if cap and cap.isOpened():
+        cap.release()
+    cap = None
     is_running = False
+    monitoring_status["running"] = False
 
 def start_detection_loop():
     global is_running
@@ -111,6 +103,13 @@ def start_detection_loop():
 def stop_detection_loop():
     global is_running
     is_running = False
+
+
+def stop_monitoring():
+    global cap
+    if cap and cap.isOpened():
+        cap.release()
+
 
 def get_latest_detections():
     with lock:
