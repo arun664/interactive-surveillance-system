@@ -191,3 +191,5 @@ mypy-report/
 # OS or Editor-specific files
 .DS_Store
 Thumbs.db
+
+app/data

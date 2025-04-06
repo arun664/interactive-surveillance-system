@@ -1,3 +1,7 @@
+import whisper
+
+model = whisper.load_model("base")  # options: tiny, base, small, medium, large
+
 def transcribe_voice(audio_path: str) -> str:
-    # Placeholder – in real version, use Whisper or Google STT
-    return "track person at the front door after 9 PM"
+    result = model.transcribe(audio_path)
+    return result["text"]
