@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useEffect, useState } from "react";
 import { Alert } from "../types";
 
 interface AlertListProps {
@@ -12,6 +12,14 @@ const AlertList: React.FC<AlertListProps> = ({
   onDeleteAlert,
   onClearAlerts,
 }) => {
+  const [sortedAlerts, setSortedAlerts] = useState<Alert[]>([]);
+
+  // Sort alerts in descending order by timestamp whenever the alerts prop changes
+  useEffect(() => {
+    const sorted = [...alerts].sort((a, b) => b.timestamp - a.timestamp);
+    setSortedAlerts(sorted);
+  }, [alerts]);
+
   const getAlertTypeColor = (type: string) => {
     switch (type) {
       case "loitering":
@@ -33,7 +41,7 @@ const AlertList: React.FC<AlertListProps> = ({
     <div className='bg-white shadow rounded-lg p-6'>
       <div className='flex justify-between mb-4'>
         <h3 className='text-lg font-semibold'>Recent Alerts</h3>
-        {alerts.length > 0 && (
+        {sortedAlerts.length > 0 && (
           <button
             onClick={onClearAlerts}
             className='bg-red-600 hover:bg-red-700 text-white px-3 py-1 rounded text-sm'
@@ -43,13 +51,13 @@ const AlertList: React.FC<AlertListProps> = ({
         )}
       </div>
 
-      {alerts.length === 0 ? (
+      {sortedAlerts.length === 0 ? (
         <p className='text-gray-500 text-center py-8'>
           No alerts detected yet.
         </p>
       ) : (
         <div className='space-y-3'>
-          {alerts.map((alert) => (
+          {sortedAlerts.map((alert) => (
             <div
               key={alert.id}
               className={`border-l-4 p-4 rounded shadow-sm ${getAlertTypeColor(

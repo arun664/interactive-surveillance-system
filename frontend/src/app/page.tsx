@@ -16,15 +16,16 @@ export default function Home() {
     "feed"
   );
 
+  // Function to fetch alerts
+  const fetchAlerts = async () => {
+    const response = await apiService.getAlerts();
+    if (response.data) {
+      setAlerts(response.data.alerts);
+    }
+  };
+
   useEffect(() => {
     // Initial fetch of alerts
-    const fetchAlerts = async () => {
-      const response = await apiService.getAlerts();
-      if (response.data) {
-        setAlerts(response.data.alerts);
-      }
-    };
-
     fetchAlerts();
 
     // Set up WebSocket
@@ -43,11 +44,22 @@ export default function Home() {
 
     wsService.connect();
 
+    // Set up polling interval to refresh alerts every 15 seconds
+    const intervalId = setInterval(fetchAlerts, 15000);
+
     // Cleanup on unmount
     return () => {
       wsService.disconnect();
+      clearInterval(intervalId);
     };
   }, []);
+
+  // Also fetch alerts when the alerts tab becomes active
+  useEffect(() => {
+    if (activeTab === "alerts") {
+      fetchAlerts();
+    }
+  }, [activeTab]);
 
   const handleDeleteAlert = async (alertId: string) => {
     const response = await apiService.deleteAlert(alertId);

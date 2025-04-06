@@ -74,36 +74,29 @@ const ConfigPanel: React.FC = () => {
   };
 
   const addIntrustionZone = () => {
-    // Simple example - in a real app you'd have a canvas to draw zones
-    const zonePoints = window.prompt(
-      "Enter zone points in format: x1,y1|x2,y2|x3,y3|x4,y4"
-    );
-
-    if (zonePoints && zoneName.trim()) {
-      try {
-        const points = zonePoints
-          .split("|")
-          .map((point) => point.split(",").map(Number));
-
-        const newZone: Zone = {
-          points,
-          name: zoneName.trim(),
-          active: true,
-        };
-
-        setConfig((prev) => ({
-          ...prev,
-          intrusion_zones: [...prev.intrusion_zones, newZone],
-        }));
-
-        setZoneName(""); // Reset zone name input
-        // eslint-disable-next-line @typescript-eslint/no-unused-vars
-      } catch (err) {
-        setError("Invalid zone format");
-      }
-    } else {
+    if (!zoneName.trim()) {
       setError("Zone name is required");
+      return;
     }
+
+    // Create a simple rectangular zone in the center of the video
+    const newZone: Zone = {
+      points: [
+        [0.25, 0.25],
+        [0.75, 0.25],
+        [0.75, 0.75],
+        [0.25, 0.75],
+      ],
+      name: zoneName.trim(),
+      active: true,
+    };
+
+    setConfig((prev) => ({
+      ...prev,
+      intrusion_zones: [...prev.intrusion_zones, newZone],
+    }));
+
+    setZoneName(""); // Reset zone name input
   };
 
   const toggleZoneStatus = (index: number) => {
@@ -124,6 +117,19 @@ const ConfigPanel: React.FC = () => {
     setConfig((prev) => ({
       ...prev,
       intrusion_zones: prev.intrusion_zones.filter((_, i) => i !== index),
+    }));
+  };
+
+  // Set current time to time field
+  const setCurrentTime = (field: "quiet_period_start" | "quiet_period_end") => {
+    const now = new Date();
+    const hours = now.getHours().toString().padStart(2, "0");
+    const minutes = now.getMinutes().toString().padStart(2, "0");
+    const currentTime = `${hours}:${minutes}`;
+
+    setConfig((prev) => ({
+      ...prev,
+      [field]: currentTime,
     }));
   };
 
@@ -234,25 +240,43 @@ const ConfigPanel: React.FC = () => {
                   <label className='block text-sm font-medium text-gray-700 mb-1'>
                     Start Time
                   </label>
-                  <input
-                    type='time'
-                    name='quiet_period_start'
-                    value={config.quiet_period_start}
-                    onChange={handleChange}
-                    className='w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500'
-                  />
+                  <div className='flex'>
+                    <input
+                      type='time'
+                      name='quiet_period_start'
+                      value={config.quiet_period_start}
+                      onChange={handleChange}
+                      className='flex-1 px-3 py-2 border border-gray-300 rounded-l-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500'
+                    />
+                    <button
+                      type='button'
+                      onClick={() => setCurrentTime("quiet_period_start")}
+                      className='px-3 py-2 bg-gray-100 border border-l-0 border-gray-300 rounded-r-md hover:bg-gray-200 text-sm'
+                    >
+                      Now
+                    </button>
+                  </div>
                 </div>
                 <div>
                   <label className='block text-sm font-medium text-gray-700 mb-1'>
                     End Time
                   </label>
-                  <input
-                    type='time'
-                    name='quiet_period_end'
-                    value={config.quiet_period_end}
-                    onChange={handleChange}
-                    className='w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500'
-                  />
+                  <div className='flex'>
+                    <input
+                      type='time'
+                      name='quiet_period_end'
+                      value={config.quiet_period_end}
+                      onChange={handleChange}
+                      className='flex-1 px-3 py-2 border border-gray-300 rounded-l-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500'
+                    />
+                    <button
+                      type='button'
+                      onClick={() => setCurrentTime("quiet_period_end")}
+                      className='px-3 py-2 bg-gray-100 border border-l-0 border-gray-300 rounded-r-md hover:bg-gray-200 text-sm'
+                    >
+                      Now
+                    </button>
+                  </div>
                 </div>
               </div>
             </div>
@@ -284,25 +308,31 @@ const ConfigPanel: React.FC = () => {
                     className='h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded mr-2'
                   />
                   <span className='text-sm mr-4'>Enable Zones</span>
-                  <button
-                    type='button'
-                    onClick={addIntrustionZone}
-                    className='px-2 py-1 text-xs bg-blue-600 text-white rounded hover:bg-blue-700'
-                    disabled={!zoneName.trim()}
-                  >
-                    Add Zone
-                  </button>
                 </div>
               </div>
 
-              <div className='mb-2'>
+              <p className='text-sm text-gray-600 mb-3'>
+                Zones are designated areas in the video feed that trigger alerts
+                when someone enters them. Create a zone by giving it a name and
+                clicking &quot;Add Zone&quot;.
+              </p>
+
+              <div className='flex space-x-2 mb-3'>
                 <input
                   type='text'
                   value={zoneName}
                   onChange={(e) => setZoneName(e.target.value)}
                   placeholder='Enter zone name'
-                  className='w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500'
+                  className='flex-1 px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500'
                 />
+                <button
+                  type='button'
+                  onClick={addIntrustionZone}
+                  className='px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 transition'
+                  disabled={!zoneName.trim()}
+                >
+                  Add Zone
+                </button>
               </div>
 
               {config.intrusion_zones.length > 0 ? (
@@ -317,7 +347,7 @@ const ConfigPanel: React.FC = () => {
                       <div>
                         <span className='font-medium'>{zone.name}</span>
                         <span className='ml-2 text-xs text-gray-500'>
-                          ({zone.points.length} points)
+                          (Default Rectangle)
                         </span>
                       </div>
                       <div>
