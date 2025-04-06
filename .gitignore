@@ -134,3 +134,12 @@ dist
 .yarn/build-state.yml
 .yarn/install-state.gz
 .pnp.*
+
+secureguard_env/
+
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+.vscode/
